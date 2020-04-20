@@ -83,7 +83,11 @@
     			</div>
 				<div class="row">
 					<span class="col-xs-6 text-center">{{gps_lat}}, {{gps_lon}} &plusmn; {{gps_horizontal_accuracy}} m <br>
-						{{gps_alt}} &plusmn; {{gps_vertical_accuracy}} ft  @ {{gps_vert_speed}} ft/min</span>
+						<b>Height Above Mean Sea Level (MSL):</b> <br>
+						{{gps_alt}} &plusmn; {{gps_vertical_accuracy}} ft  @ {{gps_vert_speed}} ft/min <br>
+						<b>Height Above Ellipsoid (HAE):</b> <br>
+						{{ gps_height_above_ellipsoid }} ft
+					</span>
 					<span class="col-xs-6 text-center">{{gps_track}}&deg; @ {{gps_speed}} KTS</span>
 				</div>
 			</div>
@@ -119,7 +123,7 @@
 			<div class="panel-footer">
 				<div class="row">
 					<label class="col-xs-6">GPS solution:</label>
-					<span class="col-xs-6">{{SolutionText}}</span>
+					<span class="col-xs-6">{{SolutionText}} @ {{ GPS_PositionSampleRate }} Hz</span>
 				</div>
 				<div class="row">
 					<label class="col-xs-6">Summary:</label>

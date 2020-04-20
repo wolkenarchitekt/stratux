@@ -103,6 +103,24 @@
                                    ng-blur="updatestaticips()" />
                         </form>
                     </div>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">GDL90: Use MSL instead of HAE, please disable for ForeFlight and SkyDemon</label>
+                        <div class="col-xs-5">
+                            <ui-switch ng-model='GDL90MSLAlt_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">SkyDemon disconnect bug workaround</label>
+                        <div class="col-xs-5">
+                            <ui-switch ng-model='SkyDemonAndroidHack' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group reset-flow">
+                        <label class="control-label col-xs-5">Estimate bearingless target distance circle</label>
+                        <div class="col-xs-5">
+                            <ui-switch ng-model='EstimateBearinglessDist' settings-change></ui-switch>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -113,11 +131,19 @@
                 <div class="panel-body">
                     <form name="WiFiSettings">
                         <div class="form-group reset-flow">
+                            <label class="control-label col-xs-5">WiFi Mode</label>
+                            <select class="custom-select" mode-input ng-model="WiFiMode"
+                                ng-change="WiFiSecurityEnabled=(WiFiSecurityEnabled || WiFiMode=='1')">
+                                <option value="0" ng-selected="WiFiMode=='0'">AccessPoint</option>
+                                <option value="1" ng-selected="WiFiMode=='1'">WiFi-Direct</option>
+                            </select>
+                        </div>
+                        <div class="form-group reset-flow">
                             <label class="control-label col-xs-5">WiFi SSID</label>
                             <input class="col-xs-7" type="text" ssid-input ng-model="WiFiSSID"
                                    placeholder="WiFi Network Name" />
                         </div>
-                        <div class="form-group reset-flow">
+                        <div class="form-group reset-flow" ng-show="WiFiMode=='0'">
                             <label class="control-label col-xs-7">Network Security</label>
                             <div class="col-xs-5">
                                 <ui-switch ng-model="WiFiSecurityEnabled" settings-change></ui-switch>
@@ -129,10 +155,25 @@
                                    ng-disabled="!WiFiSecurityEnabled" ng-class="{grayout: !WiFiSecurityEnabled}"
                                    ng-required="WiFiSecurityEnabled" placeholder="WiFi Passphrase" />
                         </div>
-                        <div class="form-group reset-flow">
+                        <div class="form-group reset-flow" ng-show="WiFiMode=='1'">
+                            <label class="control-label col-xs-5">WiFi-Direct Pin</label>
+                            <input class="col-xs-7" type="text" pin-input ng-model="WiFiDirectPin"
+                                    placeholder="WiFi-Direct PIN" ng-required="WiFiMode=='1'" />
+                        </div>
+                        <div class="form-group reset-flow" ng-show="WiFiMode=='0'">
                             <label class="control-label col-xs-7">WiFi Channel</label>
                             <select id="WiFiChannel" class="input-small col-sm-2 form-control-sm"
                                     ng-model="WiFiChannel" ng-options="x for x in Channels"></select>
+                        </div>
+                        <div class="form-group reset-flow">
+                            <label class="control-label col-xs-7">Smart WiFi</label>
+                            <div class="col-xs-5">
+                                <ui-switch ng-model="WiFiSmartEnabled" settings-change></ui-switch>
+                            </div>
+                        </div>
+                        <div class="form-group reset-flow">
+                            <label class="control-label col-xs-5">Stratux IP Address</label>
+                            <input class="col-xs-7" type="text" ip-addr-input ng-model="WiFiIPAddress" placeholder="192.168.10.1" />
                         </div>
                         <div class="form-group reset-flow">
                             <button class="btn btn-primary btn-block" ng-click="updateWiFi()">Submit WiFi Changes</button>
@@ -166,11 +207,16 @@
                         </div>
                     </div>
                     <div class="form-group">
+                        <label class="control-label col-xs-7">868 MHz (FLARM)</label>
+                        <div class="col-xs-5">
+                            <ui-switch ng-model='FLARM_Enabled' settings-change></ui-switch>
+                        </div>
+                    </div>
+                    <div class="form-group">
                         <label class="control-label col-xs-7">Ping ADS-B</label>
                         <div class="col-xs-5">
                             <ui-switch ng-model='Ping_Enabled' settings-change></ui-switch>
                         </div>
-                    </div>
                     <div class="form-group">
                         <label class="control-label col-xs-7">GPS</label>
                         <div class="col-xs-5">
@@ -379,10 +425,14 @@
                         <h4 class="modal-title">Your WiFi settings were successfully changed.</h4>
                     </div>
                     <div class="modal-body">
+                        <p>WiFi Mode: <b>{{WiFiMode=='0'?'AccessPoint':'WiFi-Direct'}}</b></p>
                         <p>WiFi SSID: <b>{{WiFiSSID}}</b></p>
                         <p>WiFi Security: <b>{{WiFiSecurityEnabled}}</b></p>
                         <p>WiFi Passphrase: <b>{{WiFiPassphrase}}</b></p>
+                        <p ng-if="WiFiMode==1">WiFi-Direct PIN: <b>{{WiFiDirectPin}}</b></p>
                         <p>WiFi Channel: <b>{{WiFiChannel}}</b></p>
+                        <p>Smart mode: <b>{{WiFiSmartEnabled}}</b></p>
+                        <p>Stratux IP: <b>{{WiFiIPAddress}}</b></p>
                         <p>Your Stratux's WiFi services are now restarting to apply the new settings. This could take up to 30 seconds.<br/>
                            You might have to reconnect to your new WiFi SSID. </p>
                     </div>

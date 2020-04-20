@@ -27,6 +27,7 @@ var URL_GPS_WS              = "ws://" + URL_HOST_BASE + "/situation";
 var URL_STATUS_WS           = "ws://" + URL_HOST_BASE + "/status";
 var URL_TRAFFIC_WS          = "ws://" + URL_HOST_BASE + "/traffic";
 var URL_WEATHER_WS          = "ws://" + URL_HOST_BASE + "/weather";
+var URL_RADAR_WS            = "ws://" + URL_HOST_BASE + "/radar";
 
 // define the module with dependency on mobile-angular-ui
 //var app = angular.module('stratux', ['ngRoute', 'mobile-angular-ui', 'mobile-angular-ui.gestures', 'appControllers']);
@@ -78,6 +79,18 @@ app.config(function ($stateProvider, $urlRouterProvider) {
 			controller: 'SettingsCtrl',
 			reloadOnSearch: false
 		})
+		.state('radar', {
+			url: '/radar',
+			templateUrl: 'plates/radar.html',
+			controller: 'RadarCtrl',
+			reloadOnSearch: false
+		})
+		.state('flarm', {
+			url: '/flarm',
+			templateUrl: 'plates/flarm.html',
+			controller: 'FlarmCtrl',
+			reloadOnSearch: false
+		})
         .state('developer', {
 			url: '/developer',
 			templateUrl: 'plates/developer.html',
@@ -99,6 +112,7 @@ app.controller('MainCtrl', function ($scope, $http) {
     .then(function(response) {
 			var settings = angular.fromJson(response.data);
             $scope.DeveloperMode = settings.DeveloperMode;
+            $scope.UAT_Enabled = settings.UAT_Enabled;
     }, function(response) {
         //Second function handles error
     });	

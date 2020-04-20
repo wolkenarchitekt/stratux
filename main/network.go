@@ -10,9 +10,6 @@
 package main
 
 import (
-	"github.com/tarm/serial"
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 	"io/ioutil"
 	"log"
 	"math"
@@ -23,6 +20,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tarm/serial"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 )
 
 type networkMessage struct {
@@ -69,6 +70,8 @@ const (
 	NETWORK_GDL90_STANDARD = 1
 	NETWORK_AHRS_FFSIM     = 2
 	NETWORK_AHRS_GDL90     = 4
+	NETWORK_FLARM_NMEA     = 8
+	NETWORK_POSITION_FFSIM = 16
 	dhcp_lease_file        = "/var/lib/dhcp/dhcpd.leases"
 	dhcp_lease_dir         = "/var/lib/dhcp"
 	extra_hosts_file       = "/etc/stratux-static-hosts.conf"
@@ -145,6 +148,10 @@ func getDHCPLeases() (map[string]string, error) {
 	 ***WARNING***: netMutex must be locked before calling this function.
 */
 func isSleeping(k string) bool {
+	// Unable to listen to ICMP without root - send to everything. Just for debugging.
+	if isX86DebugMode() {
+		return false
+	}
 	ipAndPort := strings.Split(k, ":")
 	// No ping response. Assume disconnected/sleeping device.
 	if lastPing, ok := pingResponse[ipAndPort[0]]; !ok || stratuxClock.Since(lastPing) > (10*time.Second) {
@@ -460,6 +467,10 @@ func sendGDL90(msg []byte, queueable bool) {
 	sendMsg(msg, NETWORK_GDL90_STANDARD, queueable)
 }
 
+func sendXPlane(msg []byte, queueable bool) {
+	sendMsg(msg, NETWORK_POSITION_FFSIM, queueable)
+}
+
 func monitorDHCPLeases() {
 	timer := time.NewTicker(30 * time.Second)
 	for {
@@ -651,4 +662,5 @@ func initNetwork() {
 	go networkStatsCounter()
 	go serialOutWatcher()
 	go networkOutWatcher()
+	go tcpNMEAListener()
 }

@@ -123,7 +123,7 @@ func tempAndPressureSender() {
 }
 
 func initIMU() (ok bool) {
-	imu, err := sensors.NewMPU9250()
+	imu, err := sensors.NewMPU9250(&i2cbus)
 	if err == nil {
 		myIMUReader = imu
 		return true
@@ -162,8 +162,8 @@ func sensorAttitudeSender() {
 		// Set sensor gyro calibrations
 		if c, d := &globalSettings.C, &globalSettings.D; d[0]*d[0]+d[1]*d[1]+d[2]*d[2] > 0 {
 			s.SetCalibrations(c, d)
-			log.Printf("AHRS Info: IMU Calibrations read from settings: accel %6f %6f %6f; gyro %6f %6f %6f\n",
-				c[0], c[1], c[2], d[0], d[1], d[2])
+			// log.Printf("AHRS Info: IMU Calibrations read from settings: accel %6f %6f %6f; gyro %6f %6f %6f\n",
+			//	c[0], c[1], c[2], d[0], d[1], d[2])
 		} else {
 			// Do an initial calibration
 			select { // Don't block if cal isn't receiving: only need one calibration in the queue at a time.
@@ -311,6 +311,7 @@ func sensorAttitudeSender() {
 			mySituation.muAttitude.Unlock()
 
 			makeAHRSGDL90Report() // Send whether or not valid - the function will invalidate the values as appropriate
+			makeAHRSSimReport()
 
 			// Send to AHRS debugging server.
 			if ahrswebListener != nil {

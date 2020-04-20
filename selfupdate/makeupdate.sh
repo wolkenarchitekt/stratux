@@ -25,7 +25,8 @@ cp __root__stratux-pre-start.sh work/bin/
 cp dump1090/dump1090 work/bin/
 cp -r web work/bin/
 cp image/hostapd.conf work/bin/
-cp image/hostapd-edimax.conf work/bin/
+cp image/hostapd.conf.template work/bin/
+cp image/wpa_supplicant.conf.template work/bin/
 cp image/config.txt work/bin/
 cp image/rtl-sdr-blacklist.conf work/bin/
 cp image/bashrc.txt work/bin/
@@ -38,7 +39,6 @@ cp image/99-uavionix.rules work/bin/
 cp image/motd work/bin/
 cp image/stratux-wifi.sh work/bin/
 cp image/rc.local work/bin/
-cp image/dhcpd.conf work/bin/
 cp image/interfaces work/bin/
 cp image/interfaces_clientmode work/bin/
 cp image/logrotate.conf work/bin/
@@ -46,6 +46,14 @@ cp image/logrotate_d_stratux work/bin/
 cp image/rsyslog_d_stratux work/bin/
 cp txwx/tx work/bin/
 cp txwx/rx work/bin/
+
+cp image/dhcpd.conf.template work/bin/
+cp image/interfaces.template work/bin/
+cp ogn/ddb.json work/bin
+
+# WiringPi doesn't allow static linking any more, so we deploy the shared library aswell
+cp /usr/lib/libwiringPi.so work/bin/
+
 
 cp test-data/ahrs/ahrs_table.log work/bin/
 cp ahrs_approx work/bin/

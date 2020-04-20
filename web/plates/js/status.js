@@ -37,7 +37,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 		};
 
 		socket.onmessage = function (msg) {
-			console.log('Received status update.')
+			//console.log('Received status update.')
 
 			var status = JSON.parse(msg.data)
 			// Update Status
@@ -50,6 +50,9 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 			$scope.UAT_messages_max = status.UAT_messages_max;
 			$scope.ES_messages_last_minute = status.ES_messages_last_minute;
 			$scope.ES_messages_max = status.ES_messages_max;
+			$scope.FLARM_messages_last_minute = status.FLARM_messages_last_minute;
+			$scope.FLARM_messages_max = status.FLARM_messages_max;
+			$scope.FLARM_connected = status.FLARM_connected;
 			$scope.GPS_satellites_locked = status.GPS_satellites_locked;
 			$scope.GPS_satellites_tracked = status.GPS_satellites_tracked;
 			$scope.GPS_satellites_seen = status.GPS_satellites_seen;
@@ -82,6 +85,12 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 				case 8:
 					tempGpsHardwareString = "USB u-blox 8 GNSS receiver";
 					break;
+				case 9:
+					tempGpsHardwareString = "USB u-blox 9 GNSS receiver";
+					break;
+				case 10:
+					tempGpsHardwareString = "FLARM";
+					break;
 				default:
 					tempGpsHardwareString = "Not installed";
 			}
@@ -99,10 +108,10 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 					tempGpsProtocolString = "Not communicating";
 			}
 			$scope.GPS_protocol = tempGpsProtocolString;
-			
+
 			var MiBFree = status.DiskBytesFree/1048576;
 			$scope.DiskSpace = MiBFree.toFixed(1);
-			
+
 			$scope.UAT_METAR_total = status.UAT_METAR_total;
 			$scope.UAT_TAF_total = status.UAT_TAF_total;
 			$scope.UAT_NEXRAD_total = status.UAT_NEXRAD_total;
@@ -131,7 +140,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 				/* boardtemp is celcius to tenths */
 				$scope.CPUTemp = String(boardtemp.toFixed(1) + '°C / ' + ((boardtemp * 9 / 5) + 32.0).toFixed(1) + '°F');
 				$scope.CPUTempMin = String(status.CPUTempMin.toFixed(1)) + '°C';
-				$scope.CPUTempMax = String(status.CPUTempMax.toFixed(1)) + '°C';				
+				$scope.CPUTempMax = String(status.CPUTempMax.toFixed(1)) + '°C';
 			} else {
 				// $('#CPUTemp').text('unavailable');
 			}
@@ -152,6 +161,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 			$scope.DeveloperMode = settings.DeveloperMode;
 			$scope.visible_uat = settings.UAT_Enabled;
 			$scope.visible_es = settings.ES_Enabled;
+			$scope.visible_flarm = settings.FLARM_Enabled;
 			$scope.visible_ping = settings.Ping_Enabled;
 			if (settings.Ping_Enabled) {
 				$scope.visible_uat = true;
@@ -190,13 +200,13 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
     var clicks = 0;
     var clickSeconds = 0;
     var DeveloperModeClick = 0;
-    
+
     var clickInterval = $interval(function () {
         if ((clickSeconds >= 3))
             clicks=0;
         clickSeconds++;
     }, 1000);
-    
+
 	$state.get('home').onEnter = function () {
 		// everything gets handled correctly by the controller
 	};
@@ -207,7 +217,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
 		}
 		$interval.cancel(updateTowers);
 	};
-    
+
     $scope.VersionClick = function() {
         if (clicks==0)
         {
@@ -223,7 +233,7 @@ function StatusCtrl($rootScope, $scope, $state, $http, $interval) {
             location.reload();
         }
     }
-    
+
     $scope.GetDeveloperModeClick = function() {
         return DeveloperModeClick;
     }
