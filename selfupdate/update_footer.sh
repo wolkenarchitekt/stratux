@@ -114,12 +114,13 @@ cp -f dhcpd.conf.template /etc/dhcp/dhcpd.conf.template
 #else
 #	cp -f interfaces_clientmode /etc/network/interfaces
 #fi
+# ===== END rx-tx stuff ======
 
 # TXWX files.
-#cp -f tx rx /root
-#chmod 755 /root/tx
-#chmod 755 /root/rx
-# ===== END rx-tx stuff ======
+cp -f tx rx /root
+chmod 755 /root/tx
+chmod 755 /root/rx
+
 cp -f interfaces /etc/network/interfaces
 cp -f interfaces.template /etc/network/interfaces.template
 
