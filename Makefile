@@ -18,7 +18,7 @@ $(if $(GOROOT),,$(error GOROOT is not set!))
 endif
 
 all:
-	make xdump978 xdump1090 xgen_gdl90 xtxwx $(PLATFORMDEPENDENT)
+	make xdump978 xdump1090 xgen_gdl90 $(PLATFORMDEPENDENT)
 
 xgen_gdl90:
 	go get -t -d -v ./main ./godump978 ./uatparse ./sensors
