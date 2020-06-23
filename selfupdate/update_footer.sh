@@ -16,6 +16,7 @@ fi
 cp -f __lib__systemd__system__stratux.service /lib/systemd/system/stratux.service
 cp -f clientmode_wifi_setup.service /lib/systemd/system/
 cp -f txwx.service /lib/systemd/system/
+cp -f txwx.conf /boot/
 cp -f __root__stratux-pre-start.sh /root/stratux-pre-start.sh
 chmod 644 /lib/systemd/system/stratux.service
 chmod 644 /lib/systemd/system/clientmode_wifi_setup.service

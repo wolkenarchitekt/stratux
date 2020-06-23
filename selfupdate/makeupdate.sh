@@ -43,6 +43,7 @@ cp image/logrotate_d_stratux work/bin/
 cp image/rsyslog_d_stratux work/bin/
 cp txwx/tx work/bin/
 cp txwx/rx work/bin/
+cp image/txwx.conf work/bin/
 
 cp image/dhcpd.conf.template work/bin/
 cp image/interfaces.template work/bin/
