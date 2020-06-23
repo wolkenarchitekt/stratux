@@ -32,8 +32,14 @@ var (
 )
 
 func initI2CSensors() {
+	defer func() {
+		if err := recover(); err != nil {
+			// still want to update status in case external GPS delivers pressure data (OGN Tracker, SoftRF with BMP)
+			// This usually happens on X86, where there is no embd supported I2C
+			go updateAHRSStatus()
+		}
+	}()
 	i2cbus = embd.NewI2CBus(1)
-
 	go pollSensors()
 	go sensorAttitudeSender()
 	go updateAHRSStatus()
@@ -115,11 +121,12 @@ func tempAndPressureSender() {
 		}
 		// Assuming timer is reasonably accurate, use a regular ewma
 		mySituation.BaroVerticalSpeed = u*mySituation.BaroVerticalSpeed + (1-u)*float32(altitude-altLast)/(float32(dt)/60)
+		mySituation.BaroSourceType = BARO_TYPE_BMP280
 		mySituation.muBaro.Unlock()
 		altLast = altitude
 	}
-	mySituation.BaroPressureAltitude = 99999
-	mySituation.BaroVerticalSpeed = 99999
+	//mySituation.BaroPressureAltitude = 99999
+	//mySituation.BaroVerticalSpeed = 99999
 }
 
 func initIMU() (ok bool) {
@@ -446,7 +453,7 @@ func updateAHRSStatus() {
 			msg += 1 << 1
 		}
 		// BMP is being used
-		if globalSettings.BMP_Sensor_Enabled && globalStatus.BMPConnected {
+		if (globalSettings.BMP_Sensor_Enabled && globalStatus.BMPConnected) || isTempPressValid() {
 			msg += 1 << 2
 		}
 		// IMU is doing a calibration

@@ -13,11 +13,11 @@ import (
 	"bufio"
 	"encoding/hex"
 	"encoding/json"
-	"strconv"
 	"fmt"
 	"log"
 	"math"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,7 +63,7 @@ AUXSV:
 const (
 	TRAFFIC_SOURCE_1090ES = 1
 	TRAFFIC_SOURCE_UAT    = 2
-	TRAFFIC_SOURCE_FLARM  = 4
+	TRAFFIC_SOURCE_OGN    = 4
 	TARGET_TYPE_MODE_S    = 0
 	TARGET_TYPE_ADSB      = 1
 	TARGET_TYPE_ADSR      = 2
@@ -93,7 +93,8 @@ type TrafficInfo struct {
 	AltIsGNSS           bool      // Pressure alt = 0; GNSS alt = 1
 	NIC                 int       // Navigation Integrity Category.
 	NACp                int       // Navigation Accuracy Category for Position.
-	Track               uint16    // degrees true
+	Track               float32   // degrees true
+	TurnRate            float32   // Turn rate in deg/sec (negative = turning left, positive = right)
 	Speed               uint16    // knots
 	Speed_valid         bool      // set when speed report received.
 	Vvel                int16     // feet per minute
@@ -103,15 +104,21 @@ type TrafficInfo struct {
 	// Parameters starting at 'Age' are calculated from last message receipt on each call of sendTrafficUpdates().
 	// Mode S transmits position and track in separate messages, and altitude can also be
 	// received from interrogations.
-	Age                  float64   // Age of last valid position fix, seconds ago.
+	Age                  float64   // Age of last valid position fix or last Mode-S transmission, seconds ago.
 	AgeLastAlt           float64   // Age of last altitude message, seconds ago.
-	Last_seen            time.Time // Time of last position update (stratuxClock). Used for timing out expired data.
+	Last_seen            time.Time // Time of last position update (stratuxClock) or Mode-S transmission. Used for timing out expired data.
 	Last_alt             time.Time // Time of last altitude update (stratuxClock).
 	Last_GnssDiff        time.Time // Time of last GnssDiffFromBaroAlt update (stratuxClock).
 	Last_GnssDiffAlt     int32     // Altitude at last GnssDiffFromBaroAlt update.
 	Last_speed           time.Time // Time of last velocity and track update (stratuxClock).
 	Last_source          uint8     // Last frequency on which this target was received.
 	ExtrapolatedPosition bool      //TODO: True if Stratux is "coasting" the target from last known position.
+	Last_extrapolation   time.Time
+	AgeExtrapolation     float64
+	Lat_fix              float32   // Last real, non-extrapolated latitude
+	Lng_fix              float32   // Last real, non-extrapolated longitude
+	Alt_fix              int32     // Last real, non-extrapolated altitude
+
 	BearingDist_valid    bool      // set when bearing and distance information is valid
 	Bearing              float64   // Bearing in degrees true to traffic from ownship, if it can be calculated. Units: degrees.
 	Distance             float64   // Distance to traffic from ownship, if it can be calculated. Units: meters.
@@ -167,7 +174,7 @@ func convertMetersToFeet(meters float32) float32 {
 
 func cleanupOldEntries() {
 	for icao_addr, ti := range traffic {
-		if stratuxClock.Since(ti.Last_seen).Seconds() > 60 { // keep it in the database for up to 60 seconds, so we don't lose tail number, etc...
+		if stratuxClock.Since(ti.Last_seen).Seconds() > 60 { // keep it in the database for up to 30 seconds, so we don't lose tail number, etc...
 			delete(traffic, icao_addr)
 		}
 	}
@@ -194,8 +201,11 @@ func isOwnshipTrafficInfo(ti TrafficInfo) (isOwnshipInfo bool, shouldIgnore bool
 			// If this airplane is currently in the air and we receive it, it gets priority over our ownship information.
 			// This is a sanity check to filter out such cases - only accept the ownship data if 
 			// it somewhat matches our real data
-			 // because of second-resolution in flarm we assume worst case of +1 second
+			// because of second-resolution in flarm we assume worst case of +1 second
 			timeDiff := math.Abs(ti.Age - stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds()) + 1
+			//if ti.ExtrapolatedPosition {
+			//	timeDiff = math.Abs(ti.AgeExtrapolation - stratuxClock.Since(mySituation.GPSLastGPSTimeStratuxTime).Seconds()) + 1
+			//}
 			speed := mySituation.GPSGroundSpeed
 			if ti.Speed_valid {
 				speed = math.Max(float64(ti.Speed), mySituation.GPSGroundSpeed)
@@ -293,7 +303,11 @@ func sendTrafficUpdates() {
 			ti.BearingDist_valid = false
 		}
 		ti.Age = stratuxClock.Since(ti.Last_seen).Seconds()
+		ti.AgeExtrapolation = stratuxClock.Since(ti.Last_extrapolation).Seconds()
 		ti.AgeLastAlt = stratuxClock.Since(ti.Last_alt).Seconds()
+
+		// Keep non-extrapolated traffic for 6 seconds, but extrapolate for 20
+		isCurrent := (ti.ExtrapolatedPosition && ti.AgeExtrapolation < 2 && ti.Age < 25) || (!ti.ExtrapolatedPosition && ti.Age < 6)
 
 		isOwnshipTi, shouldIgnore := isOwnshipTrafficInfo(ti)
 
@@ -319,14 +333,14 @@ func sendTrafficUpdates() {
 		if ti.Age > 2 { // if nothing polls an inactive ti, it won't push to the webUI, and its Age won't update.
 			trafficUpdate.SendJSON(ti)
 		}
-		if ti.Age < 6 && !shouldIgnore {
+		if !shouldIgnore && isCurrent {
 			if float32(ti.Alt) <= currAlt + float32(globalSettings.RadarLimits) * 1.3 && //take 30% more to see moving outs
 			   float32(ti.Alt) >= currAlt - float32(globalSettings.RadarLimits) * 1.3 && // altitude lower than upper boundary
 			   (!ti.Position_valid || ti.Distance<float64(globalSettings.RadarRange) * 1852.0 * 1.3) {    //allow more so that aircraft moves out
 				radarUpdate.SendJSON(ti)
 			}
 		}
-		if ti.Position_valid && ti.Age < 6 { // ... but don't pass stale data to the EFB.
+		if ti.Position_valid && isCurrent { // ... but don't pass stale data to the EFB.
 			//TODO: Coast old traffic? Need to determine how FF, WingX, etc deal with stale targets.
 			logTraffic(ti) // only add to the SQLite log if it's not stale
 
@@ -424,7 +438,8 @@ func estimateDistance(ti *TrafficInfo) {
 	//log.Printf("timediff: %f, expon: %f", timeDiff, expon)
 	ti.DistanceEstimated = ti.DistanceEstimated * expon + dist * (1 - expon);
 
-	if ti.BearingDist_valid && ti.Distance < 50000 {
+	// Only learn from 1090ES targets
+	if ti.BearingDist_valid && ti.Distance < 50000 && ti.Last_source == TRAFFIC_SOURCE_1090ES && ti.SignalLevel > -100 && ti.SignalLevel < 0 {
 		var errorFactor float64
 		if ti.DistanceEstimated > ti.Distance {
 			errorFactor = -(ti.DistanceEstimated / ti.Distance)
@@ -448,7 +463,7 @@ func calcLocationForBearingDistance(lat1, lon1, bearingDeg, distanceNm float64) 
 	distanceRad := distanceNm / (180 * 60 / math.Pi)
 
 	lat2Rad := math.Asin(math.Sin(lat1Rad)*math.Cos(distanceRad) + math.Cos(lat1Rad)*math.Sin(distanceRad)*math.Cos(bearingRad))
-	distanceLon := math.Atan2(math.Sin(bearingRad)*math.Sin(distanceRad)*math.Cos(lat1Rad), math.Cos(distanceRad)-math.Sin(lat1Rad)*math.Sin(lat2Rad))
+	distanceLon := -math.Atan2(math.Sin(bearingRad)*math.Sin(distanceRad)*math.Cos(lat1Rad), math.Cos(distanceRad)-math.Sin(lat1Rad)*math.Sin(lat2Rad))
 	lon2Rad := math.Mod(lon1Rad-distanceLon+math.Pi, 2.0*math.Pi) - math.Pi
 
 	lat2 = degrees(lat2Rad)
@@ -603,7 +618,7 @@ func makeTrafficReportMsg(ti TrafficInfo) []byte {
 	msg[16] = byte(vvel & 0x00FF)
 
 	// Track.
-	trk := uint8(float32(ti.Track) / TRACK_RESOLUTION) // Resolution is ~1.4 degrees.
+	trk := uint8(ti.Track / TRACK_RESOLUTION) // Resolution is ~1.4 degrees.
 	msg[17] = byte(trk)
 
 	msg[18] = ti.Emitter_category
@@ -861,7 +876,7 @@ func parseDownlinkReport(s string, signalLevel int) {
 
 	ns_vel := int32(0) // int16 won't work. Worst case (supersonic), we need 26 bits (25 bits + sign) for root sum of squares speed calculation
 	ew_vel := int32(0)
-	track := uint16(0)
+	track := float32(0)
 	speed_valid := false
 	speed := uint16(0)
 	vvel := int16(0)
@@ -897,7 +912,7 @@ func parseDownlinkReport(s string, signalLevel int) {
 		if ns_vel_valid && ew_vel_valid {
 			if ns_vel != 0 || ew_vel != 0 {
 				//TODO: Track type
-				track = uint16((360 + 90 - (int16(math.Atan2(float64(ns_vel), float64(ew_vel)) * 180 / math.Pi))) % 360)
+				track = float32((360 + 90 - (int16(math.Atan2(float64(ns_vel), float64(ew_vel)) * 180 / math.Pi))) % 360)
 			}
 			speed_valid = true
 			speed = uint16(math.Sqrt(float64((ns_vel * ns_vel) + (ew_vel * ew_vel))))
@@ -923,7 +938,7 @@ func parseDownlinkReport(s string, signalLevel int) {
 		raw_track := ((uint16(frame[13]) & 0x03) << 9) | (uint16(frame[14]) << 1) | ((uint16(frame[15]) & 0x80) >> 7)
 		//tt := ((raw_track & 0x0600) >> 9)
 		//FIXME: tt == 1 TT_TRACK. tt == 2 TT_MAG_HEADING. tt == 3 TT_TRUE_HEADING.
-		track = uint16((raw_track & 0x1ff) * 360 / 512)
+		track = float32((raw_track & 0x1ff) * 360 / 512)
 
 		// Dimensions of vehicle - skip.
 	}
@@ -1143,14 +1158,20 @@ func esListen() {
 					ti.ExtrapolatedPosition = false
 					ti.Last_seen = stratuxClock.Time // only update "last seen" data on position updates
 				}
+			} else {
+				// Old traffic had no position and update doesn't have a position either -> assume Mode-S only
+				if !ti.Position_valid {
+					ti.Last_seen = ti.Last_alt
+				}
 			}
 
 			if newTi.Speed_valid { // i.e. DF17 or DF18, TC 19 message decoded successfully by dump1090
 				valid_speed := true
-				var speed, track uint16
+				var speed uint16
+				var track float32
 
 				if newTi.Track != nil {
-					track = uint16(*newTi.Track)
+					track = float32(*newTi.Track)
 				} else { // dump1090 send a valid message, but Stratux couldn't figure it out for some reason.
 					valid_speed = false
 					//log.Printf("Missing track in DF=17/18 TC19 airborne velocity message\n")
@@ -1306,6 +1327,58 @@ func esListen() {
 	}
 }
 
+func trafficInfoExtrapolator() {
+	for {
+		time.Sleep(1 * time.Second)
+		trafficMutex.Lock()
+		for icao, ti := range traffic {
+			if ti.Age < 2 || !ti.Position_valid || !ti.Speed_valid {
+				continue
+			}
+			extrapolateTraffic(&ti)
+			//log.Printf("Extrapolating " + ti.Tail + " oldPos: %f,%f,%d, newPos: %f,%f,%d", ti.Lat_fix, ti.Lng_fix, ti.Alt_fix, ti.Lat, ti.Lng, ti.Alt)
+			traffic[icao] = ti
+		}
+		trafficMutex.Unlock()
+	}
+
+}
+
+func extrapolateTraffic(ti *TrafficInfo) {
+	if !ti.ExtrapolatedPosition {
+		ti.Lat_fix = ti.Lat
+		ti.Lng_fix = ti.Lng
+		ti.Alt_fix = ti.Alt
+		ti.Last_extrapolation = ti.Last_seen // to make computation below simpler
+	}
+
+	seconds := stratuxClock.Since(ti.Last_extrapolation).Seconds()
+	travelDist := float64(ti.Speed) * (seconds / 60 / 60) // speed is knots=nm per hour. /60/60 = nm per second
+
+	// Estimate alt
+	ti.Alt = int32(float64(ti.Alt) + (float64(ti.Vvel) * (seconds / 60)))
+	// Estimate position
+	lat, lng := calcLocationForBearingDistance(float64(ti.Lat), float64(ti.Lng), float64(ti.Track), travelDist)
+	ti.Lat = float32(lat)
+	ti.Lng = float32(lng)
+	// Estimate track
+	ti.Track += float32(seconds) * ti.TurnRate
+	for ti.Track < 0 {
+		ti.Track += 360
+	}
+	for ti.Track > 360 {
+		ti.Track -= 360
+	}
+	// ti.Track = ti.Track % 360
+
+	ti.ExtrapolatedPosition = true
+	ti.Last_extrapolation = stratuxClock.Time
+	
+	// TODO: should we call registerTrafficUpdate() to send this traffic to the web interface?
+	// Pro: web interface also shows interpolated position
+	// Con: it doesn't show the really received position with the age any more (i.e. age gets older but position updates)
+}
+
 /*
 updateDemoTraffic creates / updates a simulated traffic target for demonstration / debugging
 purpose. Target will circle clockwise around the current GPS position (if valid) or around
@@ -1379,7 +1452,7 @@ func updateDemoTraffic(icao uint32, tail string, relAlt float32, gs float64, off
 	ti.Position_valid = true
 	ti.ExtrapolatedPosition = false
 	ti.Alt = int32(mySituation.GPSAltitudeMSL + relAlt)
-	ti.Track = uint16(hdg)
+	ti.Track = float32(hdg)
 	ti.Speed = uint16(gs)
 	if hdg >= 240 && hdg < 270 {
 		ti.OnGround = true
@@ -1586,5 +1659,5 @@ func initTraffic() {
 	seenTraffic = make(map[uint32]bool)
 	trafficMutex = &sync.Mutex{}
 	go esListen()
-	go flarmListen()
+	go ognListen()
 }

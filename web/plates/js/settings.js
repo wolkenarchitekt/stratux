@@ -7,7 +7,7 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 
 	$scope.$parent.helppage = 'plates/settings-help.html';
 
-	var toggles = ['UAT_Enabled', 'ES_Enabled', 'FLARM_Enabled', 'Ping_Enabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
+	var toggles = ['UAT_Enabled', 'ES_Enabled', 'OGN_Enabled', 'Ping_Enabled', 'GPS_Enabled', 'IMU_Sensor_Enabled',
 		'BMP_Sensor_Enabled', 'DisplayTrafficSource', 'DEBUG', 'ReplayLog', 'AHRSLog', 'GDL90MSLAlt_Enabled', 'SkyDemonAndroidHack', 'EstimateBearinglessDist'];
 	var settings = {};
 	for (var i = 0; i < toggles.length; i++) {
@@ -20,13 +20,15 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		// consider using angular.extend()
 		$scope.rawSettings = angular.toJson(data, true);
 		$scope.visible_serialout = false;
-		if ((settings.SerialOutputs !== undefined) && (settings.SerialOutputs !== null) && (settings.SerialOutputs['/dev/serialout0'] !== undefined)) {
-			$scope.Baud = settings.SerialOutputs['/dev/serialout0'].Baud;
-			$scope.visible_serialout = true;
+		if ((settings.SerialOutputs !== undefined) && (settings.SerialOutputs !== null)) {
+			for (var k in settings.SerialOutputs) {
+				$scope.Baud = settings.SerialOutputs[k].Baud;
+				$scope.visible_serialout = true;
+			}
 		}
 		$scope.UAT_Enabled = settings.UAT_Enabled;
 		$scope.ES_Enabled = settings.ES_Enabled;
-		$scope.FLARM_Enabled = settings.FLARM_Enabled;
+		$scope.OGN_Enabled = settings.OGN_Enabled;
 		$scope.Ping_Enabled = settings.Ping_Enabled;
 		$scope.GPS_Enabled = settings.GPS_Enabled;
 
@@ -236,6 +238,8 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 		}
 
 		fd.append("update_file", file);
+		$scope.uploading_update = true;
+		$scope.$apply();
 
 		$http.post(URL_UPDATE_UPLOAD, fd, {
 			withCredentials: true,
@@ -244,12 +248,15 @@ function SettingsCtrl($rootScope, $scope, $state, $location, $window, $http) {
 			},
 			transformRequest: angular.identity
 		}).success(function (data) {
+			$scope.uploading_update = false;
 			alert("success. wait 5 minutes and refresh home page to verify new version.");
 			window.location.replace("/");
+			$scope.$apply();
 		}).error(function (data) {
+			$scope.uploading_update = false;
 			alert("error");
+			$scope.$apply();
 		});
-
 	};
 
 	$scope.setOrientation = function(action) {

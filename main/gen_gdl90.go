@@ -77,7 +77,7 @@ const (
 
 	MSGCLASS_UAT   = 0
 	MSGCLASS_ES    = 1
-	MSGCLASS_FLARM = 2
+	MSGCLASS_OGN   = 2
 
 	LON_LAT_RESOLUTION = float32(180.0 / 8388608.0)
 	TRACK_RESOLUTION   = float32(360.0 / 256.0)
@@ -98,6 +98,7 @@ const (
 	GPS_TYPE_PROLIFIC = 0x02
 	GPS_TYPE_UART     = 0x01
 	GPS_TYPE_FLARM    = 0x0A
+	GPS_TYPE_SOFTRF_DONGLE = 0x0B
 	GPS_PROTOCOL_NMEA = 0x10
 	GPS_PROTOCOL_UBX  = 0x30
 	// other GPS types to be defined as needed
@@ -297,21 +298,24 @@ func makeOwnshipReport() bool {
 	// See p.16.
 	msg[0] = 0x0A // Message type "Ownship".
 
-	// Ownship Target Identify (see 3.5.1.2 of GDL-90 Specifications)
-	// First half of byte is 0 for 'No Traffic Alert'
-	// Second half of byte is 0 for 'ADS-B with ICAO'
-	msg[1] = 0x00 // Alert status, address type.
-
+	// Retrieve ICAO code from settings
 	code, _ := hex.DecodeString(globalSettings.OwnshipModeS)
-	if len(code) != 3 {
+
+	// Ownship Target Identify (see 3.5.1.2 of GDL-90 Specifications)
+	// First half of byte is 0 for Alert type of 'No Traffic Alert'
+	// Second half of byte is 0 for traffic type 'ADS-B with ICAO'
+	// Send 0x01 by default, unless ICAO is set, send 0x00
+	if (len(code) == 3 && code[0] != 0xF0 && code[0] != 0x00) {
+		msg[1] = 0x00 // ADS-B Out with ICAO
+		msg[2] = code[0] // Mode S address.
+		msg[3] = code[1] // Mode S address.
+		msg[4] = code[2] // Mode S address.
+	} else {
+		msg[1] = 0x01 // ADS-B Out with self-assigned code
 		// Reserved dummy code.
 		msg[2] = 0xF0
 		msg[3] = 0x00
 		msg[4] = 0x00
-	} else {
-		msg[2] = code[0] // Mode S address.
-		msg[3] = code[1] // Mode S address.
-		msg[4] = code[2] // Mode S address.
 	}
 
 	var tmp []byte
@@ -836,7 +840,7 @@ func updateMessageStats() {
 	m := len(MsgLog)
 	UAT_messages_last_minute := uint(0)
 	ES_messages_last_minute := uint(0)
-	FLARM_messages_last_minute := uint(0)
+	OGN_messages_last_minute := uint(0)
 
 	ADSBTowerMutex.Lock()
 	defer ADSBTowerMutex.Unlock()
@@ -876,15 +880,15 @@ func updateMessageStats() {
 				}
 			} else if MsgLog[i].MessageClass == MSGCLASS_ES {
 				ES_messages_last_minute++
-			} else if MsgLog[i].MessageClass == MSGCLASS_FLARM {
-				FLARM_messages_last_minute++
+			} else if MsgLog[i].MessageClass == MSGCLASS_OGN {
+				OGN_messages_last_minute++
 			}
 		}
 	}
 	MsgLog = t
 	globalStatus.UAT_messages_last_minute = UAT_messages_last_minute
 	globalStatus.ES_messages_last_minute = ES_messages_last_minute
-	globalStatus.FLARM_messages_last_minute = FLARM_messages_last_minute
+	globalStatus.OGN_messages_last_minute = OGN_messages_last_minute
 
 	// Update "max messages/min" counters.
 	if globalStatus.UAT_messages_max < UAT_messages_last_minute {
@@ -893,8 +897,8 @@ func updateMessageStats() {
 	if globalStatus.ES_messages_max < ES_messages_last_minute {
 		globalStatus.ES_messages_max = ES_messages_last_minute
 	}
-	if globalStatus.FLARM_messages_max < FLARM_messages_last_minute {
-		globalStatus.FLARM_messages_max = FLARM_messages_last_minute
+	if globalStatus.OGN_messages_max < OGN_messages_last_minute {
+		globalStatus.OGN_messages_max = OGN_messages_last_minute
 	}
 
 	// Update average signal strength over last minute for all ADSB towers.
@@ -1144,7 +1148,7 @@ func getProductNameFromId(product_id int) string {
 type settings struct {
 	UAT_Enabled          bool
 	ES_Enabled           bool
-	FLARM_Enabled        bool
+	OGN_Enabled        bool
 	Ping_Enabled         bool
 	GPS_Enabled          bool
 	BMP_Sensor_Enabled   bool
@@ -1169,7 +1173,7 @@ type settings struct {
 	WiFiSecurityEnabled  bool
 	WiFiPassphrase       string
 	WiFiSmartEnabled     bool // "Smart WiFi" - disables the default gateway for iOS.
-
+	NoSleep              bool
 
 	WiFiMode             int
 	WiFiDirectPin        string
@@ -1179,6 +1183,7 @@ type settings struct {
 	EstimateBearinglessDist bool
 	RadarLimits          int
 	RadarRange           int
+	
 }
 
 type status struct {
@@ -1192,9 +1197,9 @@ type status struct {
 	UAT_messages_max                           uint
 	ES_messages_last_minute                    uint
 	ES_messages_max                            uint
-	FLARM_messages_last_minute                 uint
-	FLARM_messages_max                         uint
-	FLARM_connected                            bool
+	OGN_messages_last_minute                 uint
+	OGN_messages_max                         uint
+	OGN_connected                            bool
 	UAT_traffic_targets_tracking               uint16
 	ES_traffic_targets_tracking                uint16
 	Ping_connected                             bool
@@ -1240,7 +1245,7 @@ var globalStatus status
 func defaultSettings() {
 	globalSettings.UAT_Enabled = false
 	globalSettings.ES_Enabled = true
-	globalSettings.FLARM_Enabled = true
+	globalSettings.OGN_Enabled = true
 	globalSettings.GPS_Enabled = true
 	globalSettings.IMU_Sensor_Enabled = true
 	globalSettings.BMP_Sensor_Enabled = true
@@ -1258,6 +1263,7 @@ func defaultSettings() {
 	globalSettings.OwnshipModeS = "F00000"
 	globalSettings.DeveloperMode = true
 	globalSettings.StaticIps = make([]string, 0)
+	globalSettings.NoSleep = false
 	globalSettings.GDL90MSLAlt_Enabled = true
 	globalSettings.SkyDemonAndroidHack = false
 	globalSettings.EstimateBearinglessDist = true
@@ -1664,9 +1670,7 @@ func main() {
 	initDataLog()
 
 	// Start the AHRS sensor monitoring.
-	if !isX86DebugMode() {
-		initI2CSensors()
-	}
+	initI2CSensors()
 
 	// Start the GPS external sensor monitoring.
 	initGPS()
@@ -1679,6 +1683,12 @@ func main() {
 
 	// Start printing stats periodically to the logfiles.
 	go printStats()
+
+	// Extrapolate traffic when no signal is received.
+	go trafficInfoExtrapolator()
+
+	// Guesses barometric altitude if we don't have our own baro source by using GnssBaroDiff from other traffic at similar altitude
+	go baroAltGuesser()
 
 	// Monitor RPi CPU temp.
 	globalStatus.CPUTempMin = invalidCpuTemp

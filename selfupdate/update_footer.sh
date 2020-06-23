@@ -27,7 +27,6 @@ ln -fs /lib/systemd/system/txwx.service /etc/systemd/system/multi-user.target.wa
 
 
 #wifi config
-cp -f hostapd.conf /etc/hostapd/hostapd.conf
 cp -f hostapd.conf.template /etc/hostapd/hostapd.conf.template
 cp -f wpa_supplicant.conf.template /etc/wpa_supplicant/wpa_supplicant.conf.template
 
@@ -94,7 +93,8 @@ chmod 755 /usr/bin/dump1090
 cp -f libwiringPi.so /usr/lib/
 
 # OGN stuff
-cp -f ogn/ddb.json /etc/
+cp -f ddb.json /etc/
+cp -f ogn-rx-eu /usr/bin/
 
 # AHRS approx data.
 cp -f ahrs_table.log /root/
@@ -102,10 +102,9 @@ cp -f ahrs_approx /usr/bin/
 chmod 755 /usr/bin/ahrs_approx
 
 # DHCPD Config.
-cp -f dhcpd.conf /etc/dhcp/dhcpd.conf
 cp -f dhcpd.conf.template /etc/dhcp/dhcpd.conf.template
 
-# Interfaces file.
+
 # TODO: ====== possibly modify for clientmod rx-tx. Original:======
 #cp -f interfaces /root
 #cp -f interfaces_clientmode /root
@@ -121,7 +120,7 @@ cp -f tx rx /root
 chmod 755 /root/tx
 chmod 755 /root/rx
 
-cp -f interfaces /etc/network/interfaces
+# Interfaces file.
 cp -f interfaces.template /etc/network/interfaces.template
 
 
