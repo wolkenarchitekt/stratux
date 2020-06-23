@@ -41,8 +41,8 @@ cp image/rc.local work/bin/
 cp image/logrotate.conf work/bin/
 cp image/logrotate_d_stratux work/bin/
 cp image/rsyslog_d_stratux work/bin/
-cp txwx/tx work/bin/
-cp txwx/rx work/bin/
+cp image/tx work/bin/
+cp image/rx work/bin/
 cp image/txwx.conf work/bin/
 
 cp image/dhcpd.conf.template work/bin/
