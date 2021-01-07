@@ -63,6 +63,7 @@ func (e *ES) read() {
 	defer e.wg.Done()
 	log.Println("Entered ES read() ...")
 	cmd := exec.Command("/usr/bin/dump1090", "--oversample", "--net-stratux-port", "30006",  "--net", "--device-index", strconv.Itoa(e.indexID), "--ppm", strconv.Itoa(e.ppm))
+	log.Printf("Running command:", "/usr/bin/dump1090", "--oversample", "--net-stratux-port", "30006",  "--net", "--device-index", strconv.Itoa(e.indexID), "--ppm", strconv.Itoa(e.ppm))
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
